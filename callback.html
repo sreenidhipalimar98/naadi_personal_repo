@@ -1,0 +1,89 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tokens</title>
+</head>
+<body>
+  <h1>Tokens</h1>
+  <p><strong>ID Token:</strong> <span id="id-token"></span></p>
+  <p><strong>Access Token:</strong> <span id="access-token"></span></p>
+
+  <script>
+    // Function to parse URL fragment and extract tokens
+    function getTokensFromFragment() {
+      const fragment = window.location.hash.substring(1); // Remove the '#' from the fragment
+      const params = new URLSearchParams(fragment);
+
+      const idToken = params.get('id_token');
+      const accessToken = params.get('access_token');
+
+      // Display tokens on the page
+      document.getElementById('id-token').textContent = idToken || 'Not found';
+      document.getElementById('access-token').textContent = accessToken || 'Not found';
+
+      // Optionally decode and log the ID token (for debugging)
+      if (idToken) {
+        const decoded = parseJwt(idToken);
+        console.log('Decoded ID Token:', decoded);
+      }
+    }
+
+    // Helper function to decode JWT (for debugging)
+    function parseJwt(token) {
+      const base64Url = token.split('.')[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonPayload = decodeURIComponent(
+        atob(base64)
+          .split('')
+          .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+          .join('')
+      );
+      return JSON.parse(jsonPayload);
+    }
+
+    // Run the function when the page loads
+    window.onload = getTokensFromFragment;
+  </script>
+</body>
+</html>
